@@ -270,6 +270,84 @@ placeholder_op = PlaceholderOp()
 oneslike_op = OnesLikeOp()
 zeroslike_op = ZerosLikeOp()
 
+class DotOp(Op):
+    """Op to dot-multiply two nodes."""
+    def __call__(self, node_A, node_B):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A, node_B]
+        new_node.name = "(%s^T * %s)" % (node_A.name, node_B.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        """Given values of two input nodes, return result of dot multiplication."""
+        assert len(input_vals) == 2
+        return np.dot(input_vals[0], input_vals[1])
+
+    def gradient(self, node, output_grad):
+        """Given gradient of multiply node, return gradient contributions to each input."""
+        return [output_grad * node.inputs[1], output_grad * node.inputs[0]]
+
+class SigmoidOp(Op):
+    """Op to perform sigmoid activation function"""
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "Sigmoid(%s)" % node_A.name
+        return new_node
+
+    def compute(self, node, input_vals):
+        """Given values of input node, return result of Sigmoid function. 1/(1+e^-x)"""
+        assert len(input_vals) == 1
+        return np.array(1/(1 + np.exp(-input_vals[0])))
+
+    def gradient(self, node, output_grad):
+        """Given gradient of Sigmoid node, return gradient contribution to input."""
+        return [output_grad * sigmoid_op(node.inputs[0]) * sub_byconst_op(1, sigmoid_op(node.inputs[0]))]
+
+class SubByConstOp(Op):
+    """Op to element-wise sub a nodes by a constant."""
+    def __call__(self, const_val, node_A):
+        new_node = Op.__call__(self)
+        new_node.const_attr = const_val
+        new_node.inputs = [node_A]
+        new_node.name = "(%s-%s)" % (str(const_val), node_A.name)
+        return new_node
+
+    def compute(self, node, input_vals):
+        """Given values of input node, return result of element-wise substration."""
+        assert len(input_vals) == 1
+        return node.const_attr - input_vals[0]
+
+    def gradient(self, node, output_grad):
+        """Given gradient of sub node, return gradient contribution to input."""
+        return [sub_byconst_op(0, output_grad)]
+
+dot_op = DotOp()
+sigmoid_op = SigmoidOp()
+sub_byconst_op = SubByConstOp()
+
+class LogOp(Op):
+    """Op to element-wise log a nodes."""
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "log(%s)" % node_A.name
+        return new_node
+
+    def compute(self, node, input_vals):
+        """Given values of input node, return result of log function. log(exp(x))= x"""
+        assert len(input_vals) == 1
+        return np.log(input_vals[0])
+
+    def gradient(self, node, output_grad):
+        """Given gradient of log node, return gradient contribution to input."""
+        ### y = ln(x) ; dy = 1/x
+        return [1/node.inputs[0]]
+
+# class ReduceSumOp(Op):
+
+log_op = LogOp()
+
 class Executor:
     """Executor computes values for a given subset of nodes in a computation graph.""" 
     def __init__(self, eval_node_list):
@@ -311,6 +389,13 @@ class Executor:
                 op = oneslike_op
             elif isinstance(node.op, ZerosLikeOp):
                 op = zeroslike_op
+
+            elif isinstance(node.op, DotOp):
+                op = dot_op
+            elif isinstance(node.op, SigmoidOp):
+                op = sigmoid_op
+            elif isinstance(node.op, SubByConstOp):
+                op = sub_byconst_op
 
             node_to_val_map[node] = op.compute(node, [node_to_val_map[n] for n in node.inputs])
 
@@ -362,6 +447,13 @@ def gradients(output_node, node_list):
             op = oneslike_op
         elif isinstance(node.op, ZerosLikeOp):
             op = zeroslike_op
+
+        elif isinstance(node.op, DotOp):
+            op = dot_op
+        elif isinstance(node.op, SigmoidOp):
+            op = sigmoid_op
+        elif isinstance(node.op, SubByConstOp):
+            op = sub_byconst_op
 
         node_to_output_grads_list[node] = op.gradient(node, node_to_output_grad[node])
         i = 0

@@ -189,3 +189,38 @@ def test_matmul_two_vars():
     assert np.array_equal(y_val, expected_yval)
     assert np.array_equal(grad_x2_val, expected_grad_x2_val)
     assert np.array_equal(grad_x3_val, expected_grad_x3_val)
+
+def test_logistic_regression_1():
+    x = ad.Variable(name = "input")  #n*1
+    w = ad.Variable(name = "weight") #n*1
+    b = ad.Variable(name = "bias")   #1
+    logits = ad.dot_op(w, x) + b
+    y = ad.sigmoid_op(logits)
+
+    x_val = 2 * np.ones(3)
+    w_val = 3 * np.ones(3)
+    b_val = 4
+
+    # executor = ad.Executor([y])
+    # y_val, = executor.run(feed_dict = {x: x_val, w: w_val, b: b_val}) #逗号使结果不为list
+    # expected_yval = np.divide(1, 1 + np.exp(-(np.dot(x_val, w_val) + b_val)))
+    # assert np.array_equal(y_val, expected_yval)
+    grad_x, grad_w, grad_b = ad.gradients(y, [x, w, b])
+    executor = ad.Executor([y, grad_x, grad_w, grad_b])
+    y_val, grad_x_val, grad_w_val, grad_b_val = \
+        executor.run(feed_dict = {x: x_val, w: w_val, b: b_val})
+    print(grad_x.name, grad_w.name, grad_b.name)
+    expected_yval = np.divide(1, 1 + np.exp(-(np.dot(x_val, w_val) + b_val)))
+    y_base = np.ones_like(expected_yval)
+    expected_grad_x_val = np.multiply(y_base*expected_yval*(1-expected_yval), w_val)
+    expected_grad_w_val = np.multiply(y_base*expected_yval*(1-expected_yval), x_val)
+    expected_grad_b_val = y_base*expected_yval*(1-expected_yval)
+
+    assert isinstance(y, ad.Node)
+    assert np.array_equal(y_val, expected_yval)
+    assert np.array_equal(grad_x_val, expected_grad_x_val)
+    assert np.array_equal(grad_w_val, expected_grad_w_val)
+    assert np.array_equal(grad_b_val, expected_grad_b_val)
+
+# if __name__ == '__main__':
+#     test_logistic_regression_1()
