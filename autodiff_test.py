@@ -222,5 +222,28 @@ def test_logistic_regression_1():
     assert np.array_equal(grad_w_val, expected_grad_w_val)
     assert np.array_equal(grad_b_val, expected_grad_b_val)
 
-# if __name__ == '__main__':
-#     test_logistic_regression_1()
+def training_loop():
+    x = ad.Variable(name = "input")  #n*1
+    w = ad.Variable(name = "weight") #n*1
+    b = ad.Variable(name = "bias")   #1
+    logits = ad.dot_op(w, x) + b
+    y = ad.sigmoid_op(logits)
+    x_val = 2 * np.ones(3)
+    w_val = 3 * np.ones(3)
+    b_val = 4
+
+    grad_x, grad_w, grad_b = ad.gradients(y, [x, w, b])
+    executor = ad.Executor([y, grad_x, grad_w, grad_b])
+    epochs = 10
+    learning_rate = 10
+    for iter_ in range(epochs):
+        print("eposh: %s, weight: %s, bias: %s" % (iter_, w_val, b_val))
+        y_val, grad_x_val, grad_w_val, grad_b_val = \
+            executor.run(feed_dict = {x: x_val, w: w_val, b: b_val})
+        # update parameters 
+        w_val = w_val - learning_rate * grad_w_val
+        b_val = b_val - learning_rate * grad_b_val
+        print(" error:%s, weight-diff:%s, bias-diff:%s" % (grad_x_val, grad_w_val, grad_b_val))
+
+if __name__ == '__main__':
+    training_loop()
