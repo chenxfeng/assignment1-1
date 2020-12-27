@@ -245,5 +245,38 @@ def training_loop():
         b_val = b_val - learning_rate * grad_b_val
         print(" error:%s, weight-diff:%s, bias-diff:%s" % (grad_x_val, grad_w_val, grad_b_val))
 
+def test_logistic_regression_2():
+    x = ad.Variable(name = "input")  #n*1
+    w = ad.Variable(name = "weight") #n*1
+    b = ad.Variable(name = "bias")   #1
+    logits = ad.matmul_op(x, w) + b
+    y = ad.softmax_with_cross_entropy_op(logits)
+
+    x_val = np.array([[2, 2, 2]])
+    w_val = np.array([[1, 1, 1], [2, 2, 2]]).transpose()
+    b_val = 5 * np.ones(2)
+    # print(x_val, w_val, b_val, np.matmul(x_val, w_val) + b_val)
+
+    grad_x, grad_w, grad_b = ad.gradients(y, [x, w, b])
+    executor = ad.Executor([y, grad_x, grad_w, grad_b])
+    y_val, grad_x_val, grad_w_val, grad_b_val = \
+        executor.run(feed_dict = {x: x_val, w: w_val, b: b_val})
+
+    x_row_max = (np.dot(x_val, w_val) + b_val).max(axis=-1)
+    x_row_max = x_row_max.reshape(list((np.matmul(x_val, w_val) + b_val).shape)[:-1]+[1])
+    e_x = np.exp((np.matmul(x_val, w_val) + b_val) - x_row_max)
+    expected_yval = e_x / e_x.sum(axis=-1).reshape(list((np.matmul(x_val, w_val) + b_val).shape)[:-1]+[1])
+    y_base = np.ones_like(expected_yval)
+    expected_grad_x_val = np.matmul(y_base*(expected_yval - 1), w_val.transpose())
+    expected_grad_w_val = np.matmul(x_val.transpose(), y_base*(expected_yval - 1))
+    expected_grad_b_val = y_base*(expected_yval - 1)
+    # print(grad_b_val)
+    # print(expected_grad_b_val)
+    assert isinstance(y, ad.Node)
+    assert np.array_equal(y_val, expected_yval)
+    assert np.array_equal(grad_x_val, expected_grad_x_val)
+    assert np.array_equal(grad_w_val, expected_grad_w_val)
+    assert np.array_equal(grad_b_val, expected_grad_b_val)
+
 if __name__ == '__main__':
     training_loop()

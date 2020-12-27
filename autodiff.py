@@ -344,9 +344,44 @@ class LogOp(Op):
         ### y = ln(x) ; dy = 1/x
         return [1/node.inputs[0]]
 
-# class ReduceSumOp(Op):
+class SubConstOp(Op):
+    """Op to element-wise sub a nodes by a constant."""
+    def __call__(self, node_A, const_val):
+        new_node = Op.__call__(self)
+        new_node.const_attr = const_val
+        new_node.inputs = [node_A]
+        new_node.name = "(%s-%s)" % (node_A.name, str(const_val))
+        return new_node
+
+    def compute(self, node, input_vals):
+        """Given values of input node, return result of element-wise substration."""
+        assert len(input_vals) == 1
+        return input_vals[0] - node.const_attr
+
+    def gradient(self, node, output_grad):
+        """Given gradient of sub node, return gradient contribution to input."""
+        return [output_grad]
+
+class SoftmaxOp(Op):
+    """softmax with cross-entropy loss: Loss = 1/N \sum{y log y^{hat}}"""
+    """y is the one-hot vector of true label, y^{hat} is the estimated probability from softmax."""
+    def __call__(self, node_A):
+        new_node = Op.__call__(self)
+        new_node.inputs = [node_A]
+        new_node.name = "softmax-cross-entroy-loss(%s)" % node_A.name
+        return new_node
+    def compute(self, node, input_vals):
+        assert len(input_vals) == 1
+        x_row_max = input_vals[0].max(axis=-1).reshape(list(input_vals[0].shape)[:-1]+[1])
+        x = input_vals[0] - x_row_max
+        return np.exp(x) / np.exp(x).sum(axis=-1).reshape(list(input_vals[0].shape)[:-1]+[1])
+    def gradient(self, node, output_grad):
+        return [sub_const_op(node, 1)] #not correct
+        # TODO: need a correct impl of softmax with cross-entroy loss
 
 log_op = LogOp()
+sub_const_op = SubConstOp()
+softmax_with_cross_entropy_op = SoftmaxOp()
 
 class Executor:
     """Executor computes values for a given subset of nodes in a computation graph.""" 
@@ -397,6 +432,14 @@ class Executor:
             elif isinstance(node.op, SubByConstOp):
                 op = sub_byconst_op
 
+            elif isinstance(node.op, LogOp):
+                op = log_op
+            elif isinstance(node.op, SubConstOp):
+                op = sub_const_op
+            elif isinstance(node.op, SoftmaxOp):
+                op = softmax_with_cross_entropy_op
+
+            # print(node.name)
             node_to_val_map[node] = op.compute(node, [node_to_val_map[n] for n in node.inputs])
 
         # Collect node values.
@@ -454,6 +497,13 @@ def gradients(output_node, node_list):
             op = sigmoid_op
         elif isinstance(node.op, SubByConstOp):
             op = sub_byconst_op
+
+        elif isinstance(node.op, LogOp):
+            op = log_op
+        elif isinstance(node.op, SubConstOp):
+            op = sub_const_op
+        elif isinstance(node.op, SoftmaxOp):
+            op = softmax_with_cross_entropy_op
 
         node_to_output_grads_list[node] = op.gradient(node, node_to_output_grad[node])
         i = 0
